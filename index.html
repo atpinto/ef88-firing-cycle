@@ -162,6 +162,7 @@ dl.specs dd { margin: 0; }
         <span><i style="background:#c9d4dc"></i>Bolt &amp; firing pin</span>
         <span><i style="background:#4f86b5"></i>Bolt carrier &amp; rods</span>
         <span><i style="background:#7ad1e0"></i>Gas piston</span>
+        <span><i style="background:#b48ee0"></i>Gas plug</span>
         <span><i style="background:#4fc3a1"></i>Springs</span>
         <span><i style="background:#e05a43"></i>Hammer &amp; sear</span>
         <span><i style="background:#e8b23a"></i>Trigger &amp; trigger bar</span>
@@ -231,6 +232,7 @@ const U = 0.12, TRAVEL = 0.9;   // carrier free travel (unlock), full travel
 const OAL = CASE_L + BUL_L - BUL_IN;
 const COCK = 1.35, FIRE = -0.24;
 const PORT_X = 1.85, CYL_Y = 0.13, CYL_Z = 0.2;
+const PLUG_R = 1.70, CYL_REAR = 1.2, VENT_X = 1.47, STROKE = 0.25; // plug's rear face, cylinder end cap, vent holes, piston stroke
 const SPRING_STOP = -3.0, CARRIER_REAR = -1.75;
 const CYCLE_SECONDS = 12;
 
@@ -259,6 +261,8 @@ function bulletX(t) {
 function findT(pred, a, b) { for (let t = a; t <= b; t += 0.0005) if (pred(t)) return t; return b; }
 const T_GAS = findT(t => bulletX(t) + BUL_L * 0.5 >= PORT_X, 0.13, 0.28);
 const T_RELEASE = findT(t => carrierD(t) >= U + 0.5, 0.33, 0.56);
+const T_STROKE = findT(t => carrierD(t) >= STROKE, 0.28, 0.56);
+const T_VENT = findT(t => PLUG_R - Math.min(carrierD(t), STROKE) <= VENT_X + 0.012, 0.28, 0.56);
 const EJECT_DUR = 0.2;
 
 // ---------- renderer / scene ----------
@@ -290,8 +294,9 @@ grid.position.y = -2.3; grid.material.transparent = true; grid.material.opacity 
 const PARTS = {
   barrel:   { name: 'Barrel', desc: 'Quick-change barrel. Its rifling spins the bullet; the steel barrel extension at the rear takes the bolt lugs.' },
   ext:      { name: 'Barrel extension', desc: 'Steel insert at the rear of the barrel with recesses for the bolt’s locking lugs.' },
-  gas:      { name: 'Gas block & port', desc: 'A small hole in the barrel taps propellant gas into the gas cylinder.' },
-  piston:   { name: 'Short-stroke piston', desc: 'Moves only a short distance, then hands its momentum to the right-hand guide rod.' },
+  gas:      { name: 'Gas block & cylinder', desc: 'Sleeve on the barrel with the gas port and the short gas cylinder. Vent holes let the gas out once the piston has moved back.' },
+  plug:     { name: 'Gas plug', desc: 'Three-position regulator in the front of the gas cylinder: small hole for normal use, large hole for a dirty rifle, closed (GR) for rifle grenades.' },
+  piston:   { name: 'Short-stroke piston', desc: 'Rests against the gas plug. Gas drives it a short way back onto the right-hand guide rod; its spring, inside the cylinder, returns it.' },
   rods:     { name: 'Guide rods', desc: 'Two rods fixed to the bolt carrier. The right one is struck by the piston.' },
   carrier:  { name: 'Bolt carrier', desc: 'Moves the bolt; its cam slot turns the bolt to lock and unlock.' },
   bolt:     { name: 'Rotating bolt', desc: 'Seven locking lugs, extractor claw and ejector. Carries the firing pin.' },
@@ -339,13 +344,13 @@ const M = {
 // [real finish, colour-coded]
 const FINISH = {
   bolt: [0xa3aaaf, 0xc9d4dc], carrier: [0x45494c, 0x4f86b5], rods: [0xc4cacd, 0x6f9ccc], pin: [0xc8ced1, 0xe6edf2],
-  piston: [0x9aa0a4, 0x7ad1e0], springs: [0x8a9094, 0x4fc3a1], hammer: [0x4a4e51, 0xe05a43], sear: [0x5b5f62, 0xf08a6a],
+  piston: [0x9aa0a4, 0x7ad1e0], plug: [0x8d9397, 0xb48ee0], springs: [0x8a9094, 0x4fc3a1], hammer: [0x4a4e51, 0xe05a43], sear: [0x5b5f62, 0xf08a6a],
   trigger: [0x0b0c0c, 0xe8b23a], bar: [0x767b7f, 0xe8b23a], follower: [0x101111, 0x3c5254],
 };
 const steel = (k, rough = 0.36) => mat(FINISH[k][0], { metalness: 0.82, roughness: rough });
 const partMat = {
   bolt: steel('bolt', 0.3), carrier: steel('carrier', 0.5), rods: steel('rods', 0.18), pin: steel('pin', 0.25),
-  piston: steel('piston', 0.3), springs: steel('springs', 0.35), hammer: steel('hammer', 0.48), sear: steel('sear', 0.45),
+  piston: steel('piston', 0.3), plug: steel('plug', 0.42), springs: steel('springs', 0.35), hammer: steel('hammer', 0.48), sear: steel('sear', 0.45),
   trigger: mat(FINISH.trigger[0], { metalness: 0.05, roughness: 0.65 }), bar: steel('bar', 0.4),
   follower: mat(FINISH.follower[0], { metalness: 0.05, roughness: 0.6 }),
 };
@@ -404,19 +409,38 @@ Promise.all([loadImg(EF88_TEX), loadImg(EF88_HEIGHT)]).then(([texImg, hImg]) => 
     r.add(box(CH - 0.08, CH - 0.005, 0.068, 0.082, -0.019, 0.019, M.dark));
   }
   const gb = box(1.76, 1.96, -0.12, 0.21, -0.12, 0.28, M.housing); gb.renderOrder = 5; reg('gas', gb); scene.add(gb);
-  const cyl = cylX(1.32, 1.94, 0.055, 0.055, M.housing, 24, true); cyl.position.y = CYL_Y; cyl.position.z = CYL_Z; cyl.renderOrder = 5; reg('gas', cyl); scene.add(cyl);
-  const bush = cylX(0.78, 0.84, 0.045, 0.045, M.housing); bush.position.y = CYL_Y; bush.position.z = CYL_Z; scene.add(bush);
+  // gas cylinder: open at the front for the plug, closed at the rear by a cap the piston rod passes through
+  const cyl = cylX(CYL_REAR, 1.96, 0.055, 0.055, M.housing, 24, true); cyl.position.y = CYL_Y; cyl.position.z = CYL_Z; cyl.renderOrder = 5; reg('gas', cyl); scene.add(cyl);
+  const cap = new THREE.Mesh(latheX([[CYL_REAR, 0.022], [CYL_REAR, 0.055], [CYL_REAR + 0.04, 0.055], [CYL_REAR + 0.04, 0.022], [CYL_REAR, 0.022]], 24), M.housing);
+  cap.position.set(0, CYL_Y, CYL_Z); cap.renderOrder = 5; reg('gas', cap); scene.add(cap);
+  for (const a of [0.5, 1.5]) { // vent holes, uncovered near the end of the piston's stroke
+    const v = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.012, 12), M.dark);
+    v.rotation.x = a - Math.PI / 2; v.position.set(VENT_X, CYL_Y + Math.sin(a) * 0.055, CYL_Z + Math.cos(a) * 0.055); scene.add(v);
+  }
 }
+// gas plug: its body fills the front of the cylinder; a cross-hole lines up with the barrel's gas port and the selected
+// orifice feeds an axial channel that opens onto the piston face. Serrated ears sit roughly horizontal in the normal setting.
+const gasPlug = new THREE.Group(); gasPlug.position.set(0, CYL_Y, CYL_Z); scene.add(gasPlug);
+gasPlug.add(reg('plug', cylX(PLUG_R, 1.96, 0.05, 0.05, partMat.plug)));
+gasPlug.add(reg('plug', cylX(1.96, 2.03, 0.063, 0.063, partMat.plug)));
+for (const sz of [-1, 1]) {
+  gasPlug.add(reg('plug', box(1.97, 2.025, -0.011, 0.011, sz > 0 ? 0.05 : -0.115, sz > 0 ? 0.115 : -0.05, partMat.plug)));
+  for (let i = 0; i < 3; i++) { const z = sz * (0.07 + i * 0.016); gasPlug.add(reg('plug', box(2.025, 2.032, -0.011, 0.011, z - 0.004, z + 0.004, partMat.plug))); }
+}
+{ const plunger = cylX(1.93, 1.99, 0.009, 0.009, partMat.plug, 10); plunger.position.y = 0.05; gasPlug.add(reg('plug', plunger)); }
 const piston = new THREE.Group(); piston.position.set(0, CYL_Y, CYL_Z); scene.add(piston);
-piston.add(reg('piston', cylX(1.42, 1.5, 0.047, 0.047, partMat.piston)));
-piston.add(reg('piston', cylX(0.76, 1.42, 0.02, 0.02, partMat.piston)));
-piston.add(reg('piston', cylX(1.12, 1.16, 0.04, 0.04, partMat.piston)));
-const pistonSpring = reg('springs', new THREE.Mesh(springGeo(7, 0.032, 0.006), partMat.springs));
-pistonSpring.position.set(0.84, CYL_Y, CYL_Z); scene.add(pistonSpring);
+piston.add(reg('piston', cylX(PLUG_R - 0.08, PLUG_R, 0.047, 0.047, partMat.piston)));
+piston.add(reg('piston', cylX(0.76, PLUG_R - 0.08, 0.02, 0.02, partMat.piston)));
+const pistonSpring = reg('springs', new THREE.Mesh(springGeo(7, 0.034, 0.006), partMat.springs));
+pistonSpring.position.set(CYL_REAR + 0.04, CYL_Y, CYL_Z); scene.add(pistonSpring);
 
 const glowUnit = (r) => { const g = new THREE.CylinderGeometry(r, r, 1, 16, 1, true); g.rotateZ(-Math.PI / 2); g.translate(0.5, 0, 0); return g; };
 const boreGas = new THREE.Mesh(glowUnit(0.027), glow(0xff7a3d)); boreGas.renderOrder = 6; scene.add(boreGas);
 const cylGas = new THREE.Mesh(glowUnit(0.045), glow(0xff7a3d)); cylGas.position.set(0, CYL_Y, CYL_Z); cylGas.renderOrder = 6; scene.add(cylGas);
+const plugGas = new THREE.Mesh(glowUnit(0.014), glow(0xffa060)); plugGas.position.set(PLUG_R, CYL_Y, CYL_Z); plugGas.scale.x = PORT_X - PLUG_R; plugGas.renderOrder = 6; scene.add(plugGas);
+const ventGas = [0.5, 1.5].map(a => {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 8), glow(0xff9a50)); m.renderOrder = 6; m.userData.dir = new THREE.Vector3(0, Math.sin(a), Math.cos(a)); scene.add(m); return m;
+});
 const portGas = (() => {
   const from = new THREE.Vector3(PORT_X, 0, 0), to = new THREE.Vector3(PORT_X, CYL_Y, CYL_Z);
   const g = new THREE.CylinderGeometry(0.016, 0.016, from.distanceTo(to), 10); const m = new THREE.Mesh(g, glow(0xffa060));
@@ -614,12 +638,12 @@ const steps = [
     text: 'The firing pin dents the primer in the base of the case. Its flash lights the propellant, and pressure in the chamber climbs to roughly 3,800 bar within a fraction of a millisecond.' },
   { s: 0.13, title: 'Bullet in the bore', parts: ['bullet', 'barrel'],
     text: 'Expanding gas drives the bullet down the barrel. The rifling grips the copper jacket and spins it so it flies point-first. The bolt stays locked, so the only way for the gas to go is forward.' },
-  { s: T_GAS, title: 'Gas drives the piston', parts: ['gas', 'piston', 'rods'],
-    text: 'Once the bullet passes the gas port, a small share of the gas bleeds up into the gas cylinder and kicks the short-stroke piston back. The piston travels only a short distance and strikes the right-hand guide rod, passing its momentum to the bolt carrier. The bullet leaves the muzzle about now.' },
+  { s: T_GAS, title: 'Gas drives the piston', parts: ['gas', 'plug', 'piston', 'rods'],
+    text: 'Once the bullet passes the gas port, a small share of the gas flows up into the gas plug at the front of the gas cylinder. The plug meters it through a small hole (normal) or a large one (dirty rifle); its third, closed setting is for rifle grenades. The gas strikes the face of the short-stroke piston, which drives the right-hand guide rod and the bolt carrier back. The bullet leaves the muzzle about now.' },
   { s: 0.28, title: 'Unlocking', parts: ['carrier', 'bolt', 'ext'],
     text: 'The carrier moves back a short way on its own. A cam slot in the carrier pushes on the bolt’s cam pin and turns the bolt until its seven lugs clear the barrel extension. This short delay gives chamber pressure time to fall.' },
-  { s: 0.33, title: 'Extraction and cocking', parts: ['bolt', 'case', 'carrier', 'hammer'],
-    text: 'Unlocked, the bolt rides back with the carrier. The extractor claw pulls the empty case out of the chamber. The carrier passes over the hammer pack and pushes the hammer down until it is caught and held.' },
+  { s: 0.33, title: 'Extraction and cocking', parts: ['bolt', 'case', 'carrier', 'hammer', 'piston'],
+    text: 'Unlocked, the bolt rides back with the carrier. The extractor claw pulls the empty case out of the chamber. The carrier passes over the hammer pack and pushes the hammer down until it is caught and held. Meanwhile the piston, at the end of its short stroke, uncovers vent holes in the gas cylinder; the leftover gas escapes and the piston spring returns it to the plug while the carrier coasts on.' },
   { s: T_RELEASE, title: 'Ejection', parts: ['case', 'springs', 'carrier'],
     text: 'When the case clears the chamber and lines up with the ejection port, the ejector tips it out sideways. The carrier reaches the end of its travel with both recoil springs compressed. AUG-family rifles can be set up to eject left or right by changing the bolt.' },
   { s: 0.6, title: 'Feeding', parts: ['springs', 'bolt', 'next', 'mag'],
@@ -656,7 +680,7 @@ steps.forEach((s, i) => {
 
 const labelsEl = document.getElementById('labels');
 const anchors = {
-  barrel: () => [3.0, 0.12, 0], ext: () => [CH - 0.15, 0.14, 0], gas: () => [1.86, 0.24, 0.28], piston: () => [1.1 + pOff, CYL_Y + 0.06, CYL_Z],
+  barrel: () => [3.0, 0.12, 0], ext: () => [CH - 0.15, 0.14, 0], gas: () => [1.86, -0.12, 0.28], plug: () => [2.0, CYL_Y + 0.08, CYL_Z], piston: () => [1.0 + pOff, CYL_Y + 0.04, CYL_Z],
   rods: () => [0.3 - dNow, CYL_Y + 0.04, CYL_Z], carrier: () => [-1.2 - dNow, 0.25, 0], bolt: () => [CH - 0.3 + bNow, 0.07, 0.05],
   pin: () => [-1.7 + bNow, 0.02, 0], springs: () => [(SPRING_STOP + CARRIER_REAR - dNow) / 2, CYL_Y + 0.06, CYL_Z], hammer: () => [-1.98, -0.18, 0.06],
   sear: () => [-2.38, -0.33, 0], trigger: () => [0.29, -0.62, 0], bar: () => [-1.0, -0.38, 0.13], pack: () => [-2.6, -0.24, 0.14], mag: () => { _v.set(0.25, -1.2, MAG_T / 2); magGroup.localToWorld(_v); return [_v.x, _v.y, _v.z]; },
@@ -680,9 +704,10 @@ function update(t) {
   const strike = 0.025 * Math.sin(Math.PI * clamp((t - 0.105) / 0.03));
   firingPin.position.x = bo + strike;
   springs.forEach(s => s.scale.x = (CARRIER_REAR - d) - SPRING_STOP);
-  pOff = t < 0.45 ? -Math.min(d, 0.25) : -0.25 * (1 - sm(0.45, 0.55, t));
+  // short stroke: the piston rides back with the carrier, vents, then its spring returns it while the carrier coasts on
+  pOff = t < T_STROKE ? -Math.min(d, STROKE) : -STROKE * (1 - sm(T_STROKE + 0.03, T_STROKE + 0.12, t));
   piston.position.x = pOff;
-  pistonSpring.scale.x = (1.12 + pOff) - 0.84;
+  pistonSpring.scale.x = (PLUG_R - 0.08 + pOff) - (CYL_REAR + 0.04);
   const pull = t < 0.9 ? sm(0, 0.07, t) : 1 - sm(0.9, 0.98, t);
   trigger.rotation.z = -0.3 * pull;
   tbar.position.x = -0.05 * pull;
@@ -702,9 +727,13 @@ function update(t) {
   const gasK = sm(0.112, 0.135, t) * (1 - sm(0.29, 0.42, t));
   boreGas.position.x = CH + CASE_L - 0.03; boreGas.scale.x = Math.max(0.001, Math.min(bx, MUZZLE) - boreGas.position.x);
   boreGas.material.opacity = 0.85 * gasK; boreGas.visible = gasK > 0.002;
-  const cg = sm(T_GAS, T_GAS + 0.012, t) * (1 - sm(0.31, 0.42, t));
-  portGas.material.opacity = 0.9 * cg * (1 - sm(0.28, 0.33, t)); portGas.visible = cg > 0.002;
-  cylGas.position.x = 1.5 + pOff; cylGas.scale.x = 1.91 - cylGas.position.x; cylGas.material.opacity = 0.8 * cg; cylGas.visible = cg > 0.002;
+  const feed = sm(T_GAS, T_GAS + 0.012, t) * (1 - sm(0.28, 0.33, t)); // port and plug carry gas until the bullet exits
+  portGas.material.opacity = 0.9 * feed; portGas.visible = feed > 0.002;
+  plugGas.material.opacity = 0.9 * feed; plugGas.visible = feed > 0.002;
+  const cg = sm(T_GAS + 0.004, T_GAS + 0.016, t) * (1 - sm(T_VENT, T_VENT + 0.04, t));
+  cylGas.position.x = PLUG_R + pOff; cylGas.scale.x = Math.max(0.012, -pOff); cylGas.material.opacity = 0.8 * cg; cylGas.visible = cg > 0.002;
+  const vk = clamp((t - T_VENT) / 0.06), vo = Math.sin(Math.PI * vk);
+  ventGas.forEach(m => { m.position.set(VENT_X, CYL_Y, CYL_Z).addScaledVector(m.userData.dir, 0.06 + 0.12 * vk); m.scale.setScalar(0.6 + 1.6 * vk); m.material.opacity = 0.75 * vo; m.visible = vo > 0.002; });
   const mf = Math.sin(Math.PI * clamp((t - 0.278) / 0.035));
   muzzleFlash.children.forEach(c => c.material.opacity = 0.85 * mf); muzzleFlash.scale.setScalar(0.4 + 1.4 * mf); muzzleFlash.visible = mf > 0.002;
   muzzleLight.intensity = 4 * mf;
