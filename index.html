@@ -128,7 +128,6 @@ dl.specs dd { margin: 0; }
     <div class="tip" id="tip" hidden></div>
     <div class="hud-top">
       <div class="brand">
-        <div class="eyebrow">Thales Australia · 5.56×45 mm · bullpup</div>
         <h1>EF88 <span>Austeyr</span></h1>
         <div class="views" role="group" aria-label="Camera view">
           <button class="chip" data-view="iso" aria-pressed="true">3/4</button>
@@ -140,7 +139,7 @@ dl.specs dd { margin: 0; }
         </div>
       </div>
       <div class="tools">
-        <label for="xray">Body <input id="xray" type="range" min="0" max="100" value="38"></label>
+        <label for="xray">Body <input id="xray" type="range" min="0" max="100" value="52"></label>
         <div class="ends"><span>see-through</span><span>solid</span></div>
         <label for="labelMode">Labels
           <select id="labelMode">
@@ -162,7 +161,7 @@ dl.specs dd { margin: 0; }
       </div>
       <div class="scrub">
         <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Position in firing cycle">
-        <div class="ticks" id="ticks"></div>
+        <div class="ticks" id="ticks" hidden></div>
       </div>
       <div class="speed">
         <label for="speed">Speed</label>
@@ -202,21 +201,6 @@ dl.specs dd { margin: 0; }
       </div>
     </div>
 
-    <div>
-      <h3>Specifications</h3>
-      <dl class="specs">
-        <dt>Calibre</dt><dd>5.56 × 45 mm NATO</dd>
-        <dt>Action</dt><dd>Gas-operated, short-stroke piston, rotating bolt</dd>
-        <dt>Layout</dt><dd>Bullpup: action and magazine behind the pistol grip</dd>
-        <dt>Barrel</dt><dd>508 mm standard, 407 mm carbine; quick-change</dd>
-        <dt>Length</dt><dd>802 mm (standard barrel)</dd>
-        <dt>Weight</dt><dd>3.25 kg empty</dd>
-        <dt>Feed</dt><dd>30-round double-stack box magazine, translucent polymer</dd>
-        <dt>Cyclic rate</dt><dd>About 680–850 rounds/min (AUG family)</dd>
-        <dt>Maker</dt><dd>Thales Australia, Lithgow, NSW</dd>
-        <dt>Lineage</dt><dd>Developed from the F88 Austeyr, the Australian version of the Steyr AUG. Entered Australian service in 2016.</dd>
-      </dl>
-    </div>
 
   </aside>
 </div>
@@ -343,7 +327,7 @@ const springGeo = (n, R, w) => new THREE.TubeGeometry(new Helix(n, R), n * 16, w
 
 // ---------- materials ----------
 const M = {
-  shell: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.72, metalness: 0.12, transparent: true, opacity: 0.38, depthWrite: false }),
+  shell: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.72, metalness: 0.12, transparent: true, opacity: 0.52, depthWrite: false }),
   barrel: glass(0x7c868c, 0.38, { metalness: 0.8, roughness: 0.3 }),
   housing: glass(0x6f7a80, 0.22, { metalness: 0.7 }),
     dark: mat(0x2a3133, { metalness: 0.4, roughness: 0.6 }),
